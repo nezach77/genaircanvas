@@ -24,32 +24,32 @@ def example(color1, color2, color3, aqi):
 
 
 def widget(aqi_category, aqi_number, aqi, city_name):
-    # city = city_name.capitalize() + " Air Quality"
-    # st.title(city)
-    # aqi_category = aqi_category.capitalize()
-    # st.markdown(
-    #    f'<p style="text-align:justify;background-color:#{aqi_number};background-size:300px 150px;color:black;font-size:32px;border-radius:2%;margin-bottom:-1em;margin-top:0em;">{aqi_category } with AQI of {aqi}</p>',
-    #    unsafe_allow_html=True,
-    # )
-    html = """
-    <script  type="text/javascript"  charset="utf-8">  
-        (function(w,d,t,f){  w[f]=w[f]||function(c,k,n){s=w[f],k=s['k']=(s['k']||(k?('&k='+k):''));s['c']=  
-        c=(c  instanceof  Array)?c:[c];s['n']=n=n||0;L=d.createElement(t),e=d.getElementsByTagName(t)[0];  
-        L.async=1;L.src='//feed.aqicn.org/feed/'+(c[n].city)+'/'+(c[n].lang||'')+'/feed.v1.js?n='+n+k;  
-        e.parentNode.insertBefore(L,e);  };  })(  window,document,'script','_aqiFeed'  );    
-    </script>
-    <span  id="city-aqi-container"></span>  
-  
-    <script  type="text/javascript"  charset="utf-8">  
-        _aqiFeed({  
-                    display: "%details",
-                    container:"city-aqi-container",
-                   city:"CITY_NAME"  });  
-    </script>
-""".replace(
-        "CITY_NAME", city_name
+    city = city_name.capitalize() + " Air Quality"
+    st.title(city)
+    aqi_category = aqi_category.capitalize()
+    st.markdown(
+        f'<p style="text-align:justify;background-color:#{aqi_number};background-size:300px 150px;color:black;font-size:32px;border-radius:2%;margin-bottom:-1em;margin-top:0em;">{aqi_category } with AQI of {aqi}</p>',
+        unsafe_allow_html=True,
     )
-    st.components.v1.html(html=html, width=250, height=250)
+    #html = """
+    #<script  type="text/javascript"  charset="utf-8">  
+    #    (function(w,d,t,f){  w[f]=w[f]||function(c,k,n){s=w[f],k=s['k']=(s['k']||(k?('&k='+k):''));s['c']=  
+    #    c=(c  instanceof  Array)?c:[c];s['n']=n=n||0;L=d.createElement(t),e=d.getElementsByTagName(t)[0];  
+    #    L.async=1;L.src='//feed.aqicn.org/feed/'+(c[n].city)+'/'+(c[n].lang||'')+'/feed.v1.js?n='+n+k;  
+    #    e.parentNode.insertBefore(L,e);  };  })(  window,document,'script','_aqiFeed'  );    
+    #</script>
+    #<span  id="city-aqi-container"></span>  
+ # 
+  #  <script  type="text/javascript"  charset="utf-8">  
+   #     _aqiFeed({  
+    #                display: "%details",
+     #               container:"city-aqi-container",
+     #              city:"CITY_NAME"  });  
+    #</script>
+#""".replace(
+#        "CITY_NAME", city_name
+#    )
+#    st.components.v1.html(html=html, width=250, height=250)
 
 
 def hex_to_rgb(hex):

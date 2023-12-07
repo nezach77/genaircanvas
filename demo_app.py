@@ -16,7 +16,7 @@ config = ConfigParser()
 config.read("config.ini")
 st.set_page_config(page_title="Air Quality", page_icon=":world_map:", layout="centered")
 
-STREAMLIT_SESSION_VARS = [("city_name", ""), ("aqi", ""), ("image", b"")]
+STREAMLIT_SESSION_VARS = [("city_name", ""), ("aqi", ""), ("image", b""), ("image_lung", b"")]
 _ = [st.session_state.setdefault(k, v) for k, v in STREAMLIT_SESSION_VARS]
 
 background_color_map = {
@@ -29,7 +29,7 @@ background_color_map = {
 }
 
 implication_map = {
-    "Good": "Air quality is considered satisfactory, and air pollution poses little or no risk.",
+    "Good": "Air quality is considered satisfactory, and air pollution poses little or no risk. Your lungs are very healthy.",
     "Moderate": "Air quality is acceptable; however, for some pollutants there may be a moderate health concern for a very small number of people who are unusually sensitive to air pollution.	Active children and adults, and people with respiratory disease, such as asthma, should limit prolonged outdoor exertion.",
     "Unhealthy for sensitive groups": "Members of sensitive groups may experience health effects. The general public is not likely to be affected.	Active children and adults, and people with respiratory disease, such as asthma, should limit prolonged outdoor exertion.",
     "Unhealthy": "Everyone may begin to experience health effects; members of sensitive groups may experience more serious health effects	Active children and adults, and people with respiratory disease, such as asthma, should avoid prolonged outdoor exertion; everyone else, especially children, should limit prolonged outdoor exertion.",
@@ -118,13 +118,13 @@ Assistant:
     text_aqi_drawing_quide = json.loads(prompt_input_for_image.decode())[
         "completion"
     ].split("\n\n")[1]
-    text_aqi_drawing_quide = f"""Draw a mural. {text_aqi_drawing_quide}. """
+    text_aqi_drawing_quide = f"""Draw an image of a pair of lung, depicting a pair of lungs surrounded by people. {text_aqi_drawing_quide}. """
     print(text_aqi_drawing_quide)
     while True:
         body_image = json.dumps(
             {
                 "text_prompts": [
-                    {"text": text_aqi_drawing_quide},
+                    {"text": text_aqi_drawing_quide}
                 ],
                 "cfg_scale": 10,
                 "seed": 0,
@@ -174,20 +174,49 @@ Assistant:
                     "completion"
                 ].split("\n\n")[1]
                 print(text_aqi_drawing_quide)
+
+    with st.spinner("See how your lungs will look like..."):
+        body_lung_image = json.dumps(
+            {
+                "text_prompts": [
+                    {"text": f"An abstract whole image of a pair of lungs surrounded by people, when air quality is {aqi_category}. {implication_map[aqi_category]}"}
+                ],
+                "cfg_scale": 10,
+                "seed": 0,
+                "steps": 12,
+            }
+        )
+        response = bedrock_client.invoke_model(
+            body=body_lung_image,
+            modelId=config.get("Bedrock", "modelIdImage"),
+            accept="*/*",
+            contentType="application/json",
+        )
+    response = json.loads(response.get("body").read())
+    images_lung = response.get("artifacts")
+    image_encoded_lung = images_lung[0].get("base64")
+    image_lung = io.BytesIO(base64.b64decode(image_encoded_lung))
+    st.session_state["image_lung"] = image_encoded_lung
+
 else:
     print("No changes from the previous mural.")
     image = io.BytesIO(base64.b64decode(st.session_state["image"]))
+    image_lung = io.BytesIO(base64.b64decode(st.session_state["image_lung"]))
     widget(aqi_category, aqi_number, aqi, city_name)
 
 
 rgb = hex_to_rgb(aqi_number)
 
+
+
+
+
 # st.subheader("")
 # st.text("We use real time AQI data using API call to https://api.waqi.info ")
+for i in [image, image_lung]:
+    original_image = Image.open(i)
 
-original_image = Image.open(image)
-
-original_image = np.array(original_image)
+    original_image = np.array(original_image)
 
 #processed_image = blur_image(original_image, blur_rate)
 #processed_image = brighten_image(processed_image, brightness_amount)
@@ -197,4 +226,4 @@ original_image = np.array(original_image)
 #    processed_image = enhance_details(processed_image)
 
 # st.text("Air Quality Mural")
-st.image([original_image])
+    st.image([original_image])

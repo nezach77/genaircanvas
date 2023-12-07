@@ -1,0 +1,3 @@
+Human: Describe a life in {city_name} when air quality condition is {implication_map[aqi_category]}.
+I want to see a lot of {background_color_map[aqi_category]} color in the scene. Make your description not to exceed 80 words.
+
