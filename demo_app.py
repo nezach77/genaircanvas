@@ -1,147 +1,200 @@
-import cv2
 import streamlit as st
 import numpy as np
 from PIL import Image
 import requests
 from streamlit_autorefresh import st_autorefresh
 from configparser import ConfigParser
+import boto3
+import json
+import base64
+import io
 
+from image_functions import *
 
-def classify_aqi(aqi):
-    if aqi >= 0 and aqi <= 50:
-        return ("Good", "00e400")
-    elif aqi >= 51 and aqi <= 100:
-        return ("Moderate", "ffff00")
-    elif aqi >= 101 and aqi <= 150:
-        return ("Unhealthy for sensitive groups", "ff7e00")
-    elif aqi >= 151 and aqi <= 200:
-        return ("Unhealthy", "ff0000")
-    elif aqi >= 201 and aqi <= 300:
-        return ("Very Unhealthy", "8f3f97")
-    elif aqi >= 301 and aqi <= 350:
-        return ("Hazardous", "7e0023")
-
-
-# col1, col2 ,col3,col4, col5 ,col6= st.columns(6)
-# with col1:
-#     color1 = st.color_picker('Good', '#00e400',key=1)
-# with col2:
-#     color2 = st.color_picker('Moderate', '#ffff00',key=2)
-# with col3:
-#     color3 = st.color_picker('Unhealthy for sensitive groups', '#ff7e00',key=3)
-# with col4:
-#     color4 = st.color_picker('Unhealthy', '#ff0000',key=4)
-# with col5:
-#     color5 = st.color_picker('Very Unhealthy', '#8f3f97',key=5)
-# with col6:
-#     color6 = st.color_picker('Hazardous', '#7e0023',key=6)
-
-# text=st.header(aqi)
-
-
-def example(color1, color2, color3, AQI):
-    st.markdown(
-        f'<p style="text-align:center;background-color: linear-gradient(to right,{color1}, {color2});color:{color3};font-size:24px;border-radius:2%;">{st.header(aqi)}</p>',
-        unsafe_allow_html=True,
-    )
-
-
-def header(aqi_category, aqi_number, city_name):
-    city = city_name.capitalize() + " Air Quality"
-    st.title(city)
-    aqi_category = aqi_category.capitalize()
-    st.markdown(
-        f'<p style="text-align:Left;background-color:white;background-size:300px 150px;color:#{aqi_number};font-size:32px;border-radius:2%;margin-bottom:-1em;margin-top:0em;">{aqi_category } with AQI of {aqi}</p>',
-        unsafe_allow_html=True,
-    )
-
-
-def brighten_image(image, amount):
-    img_bright = cv2.convertScaleAbs(image, beta=amount)
-    return img_bright
-
-
-def aqi_color_mask(image, rgb):
-    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    aqi_mask = cv2.inRange(hsv, (rgb, rgb))
-    hsv[:, :, 1] = aqi_mask
-    aqi_mask = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
-    return aqi_mask
-
-
-def blur_image(image, amount):
-    blur_img = cv2.GaussianBlur(image, (11, 11), amount)
-    return blur_img
-
-
-def enhance_details(img):
-    hdr = cv2.detailEnhance(img, sigma_s=12, sigma_r=0.15)
-    return hdr
-
-
-def hex_to_rgb(hex):
-    rgb = []
-    for i in (0, 2, 4):
-        decimal = int(hex[i : i + 2], 16)
-        rgb.append(decimal)
-
-    return tuple(rgb)
-
-
+# Initialize
 config = ConfigParser()
 config.read("config.ini")
+st.set_page_config(page_title="Air Quality", page_icon=":world_map:", layout="centered")
+
+STREAMLIT_SESSION_VARS = [("city_name", ""), ("aqi", ""), ("image", b"")]
+_ = [st.session_state.setdefault(k, v) for k, v in STREAMLIT_SESSION_VARS]
+
+background_color_map = {
+    "Good": "green",
+    "Moderate": "yellow",
+    "Unhealthy for sensitive groups": "orange",
+    "Unhealthy": "red",
+    "Very Unhealthy": "purple",
+    "Harzardous": "maroon",
+}
+
+implication_map = {
+    "Good": "Air quality is considered satisfactory, and air pollution poses little or no risk.",
+    "Moderate": "Air quality is acceptable; however, for some pollutants there may be a moderate health concern for a very small number of people who are unusually sensitive to air pollution.	Active children and adults, and people with respiratory disease, such as asthma, should limit prolonged outdoor exertion.",
+    "Unhealthy for sensitive groups": "Members of sensitive groups may experience health effects. The general public is not likely to be affected.	Active children and adults, and people with respiratory disease, such as asthma, should limit prolonged outdoor exertion.",
+    "Unhealthy": "Everyone may begin to experience health effects; members of sensitive groups may experience more serious health effects	Active children and adults, and people with respiratory disease, such as asthma, should avoid prolonged outdoor exertion; everyone else, especially children, should limit prolonged outdoor exertion.",
+    "Very Unhealthy": "Health warnings of emergency conditions. The entire population is more likely to be affected.	Active children and adults, and people with respiratory disease, such as asthma, should avoid all outdoor exertion; everyone else, especially children, should limit outdoor exertion.",
+    "Harzardous": "Health alert: everyone may experience more serious health effects.	Everyone should avoid all outdoor exertion.",
+}
 
 st_autorefresh(
     interval=config.get("UI", "interval"),
     limit=config.get("UI", "limit"),
     key="counter",
 )
+with st.sidebar:
+    map_file = open("data/worldcities_map.json")
+    city_map = json.load(map_file)
+    country = st.selectbox("Country", options = ["Poland"] + sorted(city_map.keys()), index=0)
+    city_name = st.selectbox("City", options = ["Warsaw"] + sorted(city_map[country])).lower()
+    #with st.expander("Image options"):
+    #    blur_rate = st.slider("Blurring", min_value=0.5, max_value=3.5)
+    #    brightness_amount = st.slider(
+    #        "Brightness", min_value=-50, max_value=50, value=0
+    #    )
+    #    apply_enhancement_filter = st.checkbox("Enhance Details")
 
-city_name = st.text_input("Enter City", "warsaw").lower()
+# API Query
 
 api_key = config.get("API", "api_key")
 api_url = config.get("API", "api_url")
 api_call = api_url + city_name + "/?token=" + api_key
 
-st.write(api_call)
 data = requests.get(api_call).json()
 print(data)
-if data["status"] == "ok":
+if type(data["data"]) == str:
+    st.error("Invalid city name.")
+    city_name = st.session_state["city_name"]
+    aqi = st.session_state["city_name"]
+else:
     aqi = data["data"]["aqi"]
+
+aqi_category, aqi_number, alpha = classify_aqi(aqi)
+
+
+# Bedrock
+if (st.session_state["city_name"], st.session_state["aqi"]) != (city_name, aqi):
+    (st.session_state["city_name"], st.session_state["aqi"]) = (city_name, aqi)
+    print("State changes to: ", (city_name, aqi))
+    bedrock_client = boto3.client(
+        "bedrock-runtime", region_name=config.get("Bedrock", "region")
+    )
+    # {implication_map[aqi_category]}
+    # LLM
+    prompt = f"""
+
+Human: Describe a life in {city_name} when air quality condition is {implication_map[aqi_category]}.
+I want to see a lot of {background_color_map[aqi_category]} color in the scene. Make your description not to exceed 80 words.
+
+
+Assistant:
+"""
+
+    body_llm = json.dumps(
+        {
+            "prompt": prompt,
+            "max_tokens_to_sample": 1024,
+            "temperature": 0.2,
+            "top_k": 150,
+            "top_p": 0.8,
+            "stop_sequences": ["\n\nHuman:"],
+            "anthropic_version": "bedrock-2023-05-31",
+        }
+    )
+    with st.spinner(
+        f"Checking current Air Quality Index of {city_name[0].upper()}{city_name[1:]}."
+    ):
+        response = bedrock_client.invoke_model(
+            body=body_llm,
+            modelId=config.get("Bedrock", "modelIdLlm"),
+            accept="application/json",
+            contentType="application/json",
+        )
+    widget(aqi_category, aqi_number, aqi, city_name)
+
+    prompt_input_for_image = response["body"].read()
+    # print("Description", prompt_input_for_image)
+    # Image
+    text_aqi_drawing_quide = json.loads(prompt_input_for_image.decode())[
+        "completion"
+    ].split("\n\n")[1]
+    text_aqi_drawing_quide = f"""Draw a mural. {text_aqi_drawing_quide}. """
+    print(text_aqi_drawing_quide)
+    while True:
+        body_image = json.dumps(
+            {
+                "text_prompts": [
+                    {"text": text_aqi_drawing_quide},
+                ],
+                "cfg_scale": 10,
+                "seed": 0,
+                "steps": 15,
+            }
+        )
+        print("Description", body_image)
+
+        try:
+            with st.spinner("See how it will look like..."):
+                response = bedrock_client.invoke_model(
+                    body=body_image,
+                    modelId=config.get("Bedrock", "modelIdImage"),
+                    accept="*/*",
+                    contentType="application/json",
+                )
+            response = json.loads(response.get("body").read())
+            images = response.get("artifacts")
+            image_encoded = images[0].get("base64")
+            image = io.BytesIO(base64.b64decode(image_encoded))
+            st.session_state["image"] = image_encoded
+            break
+        except Exception as e:
+            print("Exception", e)
+            with st.spinner("Trying again..."):
+                body_llm = json.dumps(
+                    {
+                        "prompt": prompt,
+                        "max_tokens_to_sample": 1024,
+                        "temperature": 0.2,
+                        "top_k": 150,
+                        "top_p": 0.8,
+                        "stop_sequences": ["\n\nHuman:"],
+                        "anthropic_version": "bedrock-2023-05-31",
+                    }
+                )
+                response = bedrock_client.invoke_model(
+                    body=body_llm,
+                    modelId=config.get("Bedrock", "modelIdLlm"),
+                    accept="application/json",
+                    contentType="application/json",
+                )
+                prompt_input_for_image = response["body"].read()
+                # print("Description", prompt_input_for_image)
+                # Image
+                text_aqi_drawing_quide = json.loads(prompt_input_for_image.decode())[
+                    "completion"
+                ].split("\n\n")[1]
+                print(text_aqi_drawing_quide)
 else:
-    st.error("Invalid station name.")
+    print("No changes from the previous mural.")
+    image = io.BytesIO(base64.b64decode(st.session_state["image"]))
+    widget(aqi_category, aqi_number, aqi, city_name)
 
-aqi_category, aqi_number = classify_aqi(aqi)
 
-header(aqi_category, aqi_number, city_name)
-
-st.subheader("")
-st.text("We use real time AQI data using API from https://aqicn.org/api/ ")
-
-blur_rate = st.sidebar.slider("Blurring", min_value=0.5, max_value=3.5)
-brightness_amount = st.sidebar.slider(
-    "Brightness", min_value=-50, max_value=50, value=0
-)
-apply_enhancement_filter = st.sidebar.checkbox("Enhance Details")
 rgb = hex_to_rgb(aqi_number)
-print(rgb)
 
-uploaded_file = st.file_uploader("Upload Your Mural", type=["jpg", "png", "jpeg"])
-if not uploaded_file:
-    image_file = "data/image.png"
-else:
-    image_file = uploaded_file
+# st.subheader("")
+# st.text("We use real time AQI data using API call to https://api.waqi.info ")
 
-original_image = Image.open(image_file)
+original_image = Image.open(image)
+
 original_image = np.array(original_image)
-print(original_image.shape)
 
-processed_image = blur_image(original_image, blur_rate)
-processed_image = brighten_image(processed_image, brightness_amount)
-# processed_image = aqi_color_mask(processed_image, rgb)
+#processed_image = blur_image(original_image, blur_rate)
+#processed_image = brighten_image(processed_image, brightness_amount)
+# processed_image = aqi_color_mask(processed_image, rgb, alpha, aqi_category)
 
-if apply_enhancement_filter:
-    processed_image = enhance_details(processed_image)
+#if apply_enhancement_filter:
+#    processed_image = enhance_details(processed_image)
 
-st.text("Air Quality Mural")
-st.image([processed_image])
+# st.text("Air Quality Mural")
+st.image([original_image])

@@ -1,0 +1,4 @@
+
+Human: Describe air quality condition of {city_name} and explain how it affects a person's life.
+Currently {city_name} has Air Quality Index of {aqi}, which is {aqi_category} for people.  {implication_map[aqi_category]}
+I want to see a lot of {background_color_map[aqi_category]} color in the scene. Make your description not to exceed 120 words.
