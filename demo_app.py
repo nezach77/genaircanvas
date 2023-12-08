@@ -8,7 +8,6 @@ import boto3
 import json
 import base64
 import io
-import cv2
 
 from image_functions import *
 

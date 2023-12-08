@@ -30,7 +30,7 @@ def widget(aqi_category, aqi_number, aqi, city_name):
         unsafe_allow_html=True,
     )
     st.markdown(
-        f'<p style="font-style:italic;text-align:center;color:black;font-size:20px;color:grey;font-weight:Italic">Real time display of city murals and condition of lungs of based on air quality on AQI</p>',
+        f'<p style="font-style:italic;text-align:center;color:black;font-size:20px;color:grey;font-weight:Italic">Displays color toned city murals and human lungs based on real-time air quality index(AQI) levels</p>',
         unsafe_allow_html=True,
     )
     st.divider()
