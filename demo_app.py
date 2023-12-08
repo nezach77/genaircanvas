@@ -8,6 +8,7 @@ import boto3
 import json
 import base64
 import io
+import cv2
 
 from image_functions import *
 
@@ -16,7 +17,7 @@ config = ConfigParser()
 config.read("config.ini")
 st.set_page_config(page_title="Air Quality", page_icon=":world_map:", layout="centered")
 
-STREAMLIT_SESSION_VARS = [("city_name", ""), ("aqi", ""), ("image", b""), ("image_lung", b"")]
+STREAMLIT_SESSION_VARS = [("city_name", ""), ("aqi", ""), ("image", b""), ("image_lung", b""),("story", "")]
 _ = [st.session_state.setdefault(k, v) for k, v in STREAMLIT_SESSION_VARS]
 
 background_color_map = {
@@ -36,6 +37,16 @@ implication_map = {
     "Very Unhealthy": "Health warnings of emergency conditions. The entire population is more likely to be affected.	Active children and adults, and people with respiratory disease, such as asthma, should avoid all outdoor exertion; everyone else, especially children, should limit outdoor exertion.",
     "Harzardous": "Health alert: everyone may experience more serious health effects.	Everyone should avoid all outdoor exertion.",
 }
+
+implication_map_intensity = {
+    "Good": "Your lungs are very healthy.The lungs have a color intensity of 1 on a scale of 6",
+    "Moderate": "Your lungs are very moderately healthy.The lungs have a color intensity of 2 on a scale of 6",
+    "Unhealthy for sensitive groups": "The lungs have a color intensity of 3 on a scale of 6",
+    "Unhealthy": "The lungs have a color intensity of 4 on a scale of 6",
+    "Very Unhealthy": "The lungs have a color intensity of 5 on a scale of 6",
+    "Harzardous": "The lungs have a color intensity of 6 on a scale of 6",
+}
+
 
 st_autorefresh(
     interval=config.get("UI", "interval"),
@@ -118,13 +129,13 @@ Assistant:
     text_aqi_drawing_quide = json.loads(prompt_input_for_image.decode())[
         "completion"
     ].split("\n\n")[1]
-    text_aqi_drawing_quide = f"""Draw an image of a pair of lung, depicting a pair of lungs surrounded by people. {text_aqi_drawing_quide}. """
+   # text_aqi_drawing_quide = f"""Draw an image of a pair of lung, depicting a pair of lungs surrounded by people. {text_aqi_drawing_quide}. """
     print(text_aqi_drawing_quide)
     while True:
         body_image = json.dumps(
             {
                 "text_prompts": [
-                    {"text": text_aqi_drawing_quide}
+                    {"text": f'Draw a mural of {city_name}. ' + text_aqi_drawing_quide}
                 ],
                 "cfg_scale": 10,
                 "seed": 0,
@@ -179,7 +190,7 @@ Assistant:
         body_lung_image = json.dumps(
             {
                 "text_prompts": [
-                    {"text": f"An abstract whole image of a pair of lungs surrounded by people, when air quality is {aqi_category}. {implication_map[aqi_category]}"}
+                    {"text": f"An abstract whole image of a pair of  lungs , when air quality is {aqi_category}. {implication_map_intensity[aqi_category]}"}
                 ],
                 "cfg_scale": 10,
                 "seed": 0,
@@ -197,33 +208,25 @@ Assistant:
     image_encoded_lung = images_lung[0].get("base64")
     image_lung = io.BytesIO(base64.b64decode(image_encoded_lung))
     st.session_state["image_lung"] = image_encoded_lung
+    st.session_state["story"] = text_aqi_drawing_quide
+    text_aqi_drawing_quide = st.session_state["story"]
 
 else:
     print("No changes from the previous mural.")
     image = io.BytesIO(base64.b64decode(st.session_state["image"]))
     image_lung = io.BytesIO(base64.b64decode(st.session_state["image_lung"]))
+    text_aqi_drawing_quide = st.session_state["story"]
     widget(aqi_category, aqi_number, aqi, city_name)
 
 
 rgb = hex_to_rgb(aqi_number)
 
 
-
-
-
-# st.subheader("")
-# st.text("We use real time AQI data using API call to https://api.waqi.info ")
-for i in [image, image_lung]:
-    original_image = Image.open(i)
-
-    original_image = np.array(original_image)
-
-#processed_image = blur_image(original_image, blur_rate)
-#processed_image = brighten_image(processed_image, brightness_amount)
-# processed_image = aqi_color_mask(processed_image, rgb, alpha, aqi_category)
-
-#if apply_enhancement_filter:
-#    processed_image = enhance_details(processed_image)
-
-# st.text("Air Quality Mural")
-    st.image([original_image])
+original_image = Image.open(image)
+lung_image = Image.open(image_lung)
+blended_image = Image.blend(lung_image,original_image, alpha=0.7)
+st.image([np.array(blended_image)])
+st.markdown(
+        f'<p style="text-align:justify;text-wrap:wrap;color:black;font-size:20px;color:grey;">{text_aqi_drawing_quide}</p>',
+        unsafe_allow_html=True,
+    )

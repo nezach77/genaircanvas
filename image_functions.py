@@ -24,13 +24,26 @@ def example(color1, color2, color3, aqi):
 
 
 def widget(aqi_category, aqi_number, aqi, city_name):
-    city = city_name.capitalize() + " Air Quality"
-    st.title(city)
-    aqi_category = aqi_category.capitalize()
+    city = city_name.capitalize() + " Air Quality is " + aqi_category
     st.markdown(
-        f'<p style="text-align:justify;background-color:#{aqi_number};background-size:300px 150px;color:black;font-size:32px;border-radius:2%;margin-bottom:-1em;margin-top:0em;">{aqi_category } with AQI of {aqi}</p>',
+        f'<p style="text-align:center;color:black;font-size:50px;">Generative Air Quality Canvas</p>',
         unsafe_allow_html=True,
     )
+    st.markdown(
+        f'<p style="font-style:italic;text-align:center;color:black;font-size:20px;color:grey;font-weight:Italic">Real time display of city murals and condition of lungs of based on air quality on AQI</p>',
+        unsafe_allow_html=True,
+    )
+    st.divider()
+    st.markdown(
+        f'<p style="text-align:center;color:black;font-size:32px;color:grey;">{city}</p>',
+        unsafe_allow_html=True,
+    )
+    aqi_category = aqi_category.capitalize()
+    st.markdown(
+        f'<p style="text-align:center;background-color:#{aqi_number};background-size:300px 150px;color:grey;font-size:32px;border-radius:2%;margin-bottom:-1em;margin-top:0em;">AQI of {aqi}</p>',
+        unsafe_allow_html=True,
+    )
+    st.divider()
     #html = """
     #<script  type="text/javascript"  charset="utf-8">  
     #    (function(w,d,t,f){  w[f]=w[f]||function(c,k,n){s=w[f],k=s['k']=(s['k']||(k?('&k='+k):''));s['c']=  
